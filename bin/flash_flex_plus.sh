@@ -578,7 +578,7 @@ def emit_optional(key, value):
         print(f"{key}=")
     else:
         print(f"{key}={shlex.quote(str(value))}")
-emit('FACTORY_SSID', data.get('factory_ssid', 'Flex00-00000000'))
+emit('FACTORY_SSID', data.get('factory_ssid', 'FP00-00000000'))
 emit('FACTORY_PASSWORD', data.get('ap_password', '12345678'))
 emit('TARGET_IP', data.get('target_ip', '192.168.4.1'))
 emit('ART_BOOTLOADER', arts.get('bootloader'))

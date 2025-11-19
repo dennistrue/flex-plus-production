@@ -3,7 +3,7 @@
 This folder mirrors the Main Hub production workflow but is tailored for Flex Plus differences:
 
 - Fixed SoftAP password (`12345678`) unless you override specific units via `bin/passwords.csv`.
-- Factory SSID/serials use the pattern `Flex<batch>-<YY><MM><serial>` to keep Flex-specific labeling.
+- Factory SSID/serials use the pattern `FP<batch>-<YY><MM><serial>` to keep labeling consistent.
 - macOS and Windows flashers (`flash_flex_plus.sh` / `flash_flex_plus.ps1`) burn flash encryption keys, write encrypted bundles, and optionally push SSIDs over Wi-Fi.
 - The browser GUI (`flash_gui.py`) launches from the `Run Flex Plus GUI` scripts so operators never touch the CLI.
 
@@ -40,9 +40,9 @@ Flex Plus uses a static SoftAP password. If you need overrides for certain batch
 ## Operator workflow
 
 1. Double-click `Run Flex Plus GUI.command` (macOS) or `RunFlexPlusGUI.bat` (Windows).
-2. Enter the batch/year/month/serial; the GUI computes the Flex SSID/serial automatically.
+2. Enter the batch/year/month/serial; the GUI computes the FP SSID/serial automatically.
 3. Click *Flash* to kick off `flash_flex_plus.(sh|ps1)`.
-4. The shell scripts pull the latest commit, ensure flash-encryption keys/efuses are in place, flash the encrypted bundle, (optionally) provision SSIDs by joining the Flex AP, and log the outcome to `bin/logs/flash_log.csv`.
+4. The shell scripts pull the latest commit, ensure flash-encryption keys/efuses are in place, flash the encrypted bundle, (optionally) provision SSIDs by joining the FP AP, and log the outcome to `bin/logs/flash_log.csv`.
 
 ## Installer wrappers
 

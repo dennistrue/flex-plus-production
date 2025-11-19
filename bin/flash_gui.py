@@ -26,7 +26,7 @@ YEAR_MIN = 0
 YEAR_MAX = 99
 MONTH_MIN = 1
 MONTH_MAX = 12
-IDENTIFIER_PREFIX = "Flex"
+IDENTIFIER_PREFIX = "FP"
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-9;?]*[ -/]*[@-~]")
 
 
@@ -136,7 +136,7 @@ INDEX_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <h1>Flex Plus Production Flasher</h1>
-  <p>Provide the batch (two digits), build year/month, and inter-batch serial (001-100). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Each SSID/serial becomes <strong>Flex&lt;batch&gt;-&lt;year&gt;&lt;month&gt;&lt;serial&gt;</strong>.</p>
+  <p>Provide the batch (two digits), build year/month, and inter-batch serial (001-100). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Each SSID/serial becomes <strong>FP&lt;batch&gt;-&lt;year&gt;&lt;month&gt;&lt;serial&gt;</strong>.</p>
   <form id="flash-form">
     <div class="row">
       <div>
