@@ -2,6 +2,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if command -v git >/dev/null 2>&1 && [ -d "${SCRIPT_DIR}/.git" ]; then
+  before="$(git -C "${SCRIPT_DIR}" rev-parse HEAD 2>/dev/null || echo "")"
+  git -C "${SCRIPT_DIR}" fetch --quiet --tags || true
+  git -C "${SCRIPT_DIR}" pull --ff-only || true
+  after="$(git -C "${SCRIPT_DIR}" rev-parse HEAD 2>/dev/null || echo "")"
+  if [[ -n "${before}" && -n "${after}" && "${before}" != "${after}" ]]; then
+    exec "$0"
+  fi
+fi
 cd "${SCRIPT_DIR}/bin"
 
 PYTHON_BIN="${FLEX_PYTHON:-python3}"

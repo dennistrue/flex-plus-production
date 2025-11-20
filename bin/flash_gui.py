@@ -387,6 +387,20 @@ def load_password_db() -> None:
         )
 
 
+def update_production_repo() -> None:
+    commands = [
+        ["git", "-C", str(PRODUCTION_DIR), "fetch", "--quiet", "--tags"],
+        ["git", "-C", str(PRODUCTION_DIR), "pull", "--ff-only"],
+    ]
+    for cmd in commands:
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError as exc:  # noqa: PERF203
+            stderr = exc.stderr.decode("utf-8", errors="ignore").strip()
+            print(f"Warning: git command failed ({' '.join(cmd)}): {stderr}")
+            break
+
+
 def build_flash_command(serial: str, password: str) -> tuple[list[str], Path]:
     system = platform.system()
     if system == "Darwin":
@@ -580,6 +594,7 @@ class FlashRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
 def run_server() -> None:
+    update_production_repo()
     load_password_db()
     manager = FlashManager()
     FlashRequestHandler.manager = manager
