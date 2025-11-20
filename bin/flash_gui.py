@@ -6,7 +6,9 @@ from __future__ import annotations
 import csv
 import http.server
 import json
+import os
 import platform
+import glob
 import re
 import shlex
 import shutil
@@ -20,6 +22,8 @@ from typing import ClassVar
 PRODUCTION_DIR = Path(__file__).resolve().parent
 PASSWORD_DB_PATH = PRODUCTION_DIR / "passwords.csv"
 DEFAULT_PASSWORD = "12345678"
+FLOW_VERSION = "gui-1.0.0"
+MANIFEST_PATH = PRODUCTION_DIR / "release" / "manifest.json"
 SERIAL_MIN = 1
 SERIAL_MAX = 100
 YEAR_MIN = 0
@@ -174,6 +178,15 @@ INDEX_HTML = """<!DOCTYPE html>
         <label for="password">Password</label>
         <input id="password" name="password" readonly>
       </div>
+      <div>
+        <label for="port">Serial port</label>
+        <select id="port" name="port">
+          <option value="">Auto</option>
+        </select>
+      </div>
+      <div style="flex:0 0 auto;align-self:flex-end;">
+        <button type="button" id="refresh-ports">Refresh ports</button>
+      </div>
     </div>
     <div class="actions">
       <button id="flash-button" type="submit">Flash</button>
@@ -186,6 +199,11 @@ INDEX_HTML = """<!DOCTYPE html>
       <span class="status-spinner" aria-hidden="true"></span>
       <span id="status-text">Ready to flash</span>
     </span>
+  </div>
+  <div class="status" style="gap:16px;">
+    <span class="status-label">Versions:</span>
+    <span id="flow-version" class="status-badge status-ready" style="background:#eef2ff;color:#312e81;">Flow <span id="flow-version-text">unknown</span></span>
+    <span id="bundle-version" class="status-badge status-ready" style="background:#ecfeff;color:#134e4a;">Bundle <span id="bundle-version-text">unknown</span></span>
   </div>
   <textarea id="logs" readonly placeholder="Logs will appear here..."></textarea>
 
@@ -201,9 +219,13 @@ INDEX_HTML = """<!DOCTYPE html>
     const serialSuffixInput = document.getElementById('serialSuffix');
     const ssidInput = document.getElementById('ssid');
     const passwordInput = document.getElementById('password');
+    const portSelect = document.getElementById('port');
+    const refreshPortsBtn = document.getElementById('refresh-ports');
     const form = document.getElementById('flash-form');
     const flashButton = document.getElementById('flash-button');
     const nextButton = document.getElementById('next-button');
+    const flowVersionEl = document.getElementById('flow-version-text');
+    const bundleVersionEl = document.getElementById('bundle-version-text');
     const SERIAL_MIN = 1;
     const SERIAL_MAX = 100;
     const STATUS_CODES = ['ready', 'flashing', 'success', 'failed'];
@@ -248,6 +270,13 @@ INDEX_HTML = """<!DOCTYPE html>
           logsEl.scrollTop = logsEl.scrollHeight;
         }
         flashButton.disabled = data.busy || !derivedReady;
+        if (data.flow_version) {
+          flowVersionEl.textContent = `${data.flow_version} (${data.flow_revision || 'unknown'})`;
+        }
+        if (data.manifest && data.manifest.version) {
+          const built = data.manifest.built_at ? ` @ ${data.manifest.built_at}` : '';
+          bundleVersionEl.textContent = `${data.manifest.version}${built}`;
+        }
       } catch (err) {
         console.error('State poll failed', err);
       }
@@ -340,6 +369,10 @@ INDEX_HTML = """<!DOCTYPE html>
       params.set('year', yearInput.value.trim());
       params.set('month', monthInput.value.trim());
       params.set('serial', serialInput.value.trim());
+       const portValue = portSelect.value;
+       if (portValue && portValue !== 'auto') {
+         params.set('port', portValue);
+       }
       try {
         const response = await fetch('/flash', {
           method: 'POST',
@@ -357,6 +390,28 @@ INDEX_HTML = """<!DOCTYPE html>
       }
     }
 
+    async function refreshPorts() {
+      try {
+        const response = await fetch('/ports');
+        if (!response.ok) return;
+        const data = await response.json();
+        const ports = Array.isArray(data.ports) ? data.ports : [];
+        const current = portSelect.value;
+        portSelect.innerHTML = '<option value=\"\">Auto</option>';
+        ports.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p;
+          portSelect.appendChild(opt);
+        });
+        if (current && ports.includes(current)) {
+          portSelect.value = current;
+        }
+      } catch (err) {
+        console.error('Port refresh failed', err);
+      }
+    }
+
     form.addEventListener('submit', startFlash);
     batchInput.addEventListener('change', lookupDerived);
     serialInput.addEventListener('change', lookupDerived);
@@ -367,11 +422,13 @@ INDEX_HTML = """<!DOCTYPE html>
     yearInput.addEventListener('input', markDerivedDirty);
     monthInput.addEventListener('input', markDerivedDirty);
     nextButton.addEventListener('click', handleNext);
+    refreshPortsBtn.addEventListener('click', refreshPorts);
     setDefaultYearMonth();
     updateStatus({ code: 'ready', message: 'Ready to flash' });
     setInterval(refreshState, 1000);
     lookupDerived();
     refreshState();
+    refreshPorts();
   </script>
 </body>
 </html>
@@ -385,6 +442,37 @@ def load_password_db() -> None:
             f"No passwords.csv found at {PASSWORD_DB_PATH}. "
             f"Defaulting every unit to password {DEFAULT_PASSWORD}."
         )
+
+
+def load_manifest_info() -> dict[str, str]:
+    manifest = {"version": "unknown", "built_at": "unknown"}
+    try:
+        data = json.loads(MANIFEST_PATH.read_text())
+        manifest["version"] = str(data.get("version", "unknown"))
+        manifest["built_at"] = str(data.get("built_at", "unknown"))
+    except FileNotFoundError:
+        print(f"Warning: manifest.json not found at {MANIFEST_PATH}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warning: failed to parse manifest.json: {exc}")
+    return manifest
+
+
+def detect_flow_revision() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(PRODUCTION_DIR), "rev-parse", "--short", "HEAD"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return result.stdout.strip()
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+MANIFEST_INFO = load_manifest_info()
+FLOW_REVISION = detect_flow_revision()
 
 
 def update_production_repo() -> None:
@@ -401,13 +489,16 @@ def update_production_repo() -> None:
             break
 
 
-def build_flash_command(serial: str, password: str) -> tuple[list[str], Path]:
+def build_flash_command(serial: str, password: str, port: str | None) -> tuple[list[str], Path]:
     system = platform.system()
     if system == "Darwin":
         script = PRODUCTION_DIR / "flash_flex_plus.sh"
         if not script.exists():
             raise FileNotFoundError(f"macOS script not found: {script}")
-        return ["/bin/bash", str(script), "--serial", serial, "--password", password], PRODUCTION_DIR
+        cmd = ["/bin/bash", str(script), "--serial", serial, "--password", password]
+        if port:
+            cmd.extend(["--port", port])
+        return cmd, PRODUCTION_DIR
     if system == "Windows":
         script = PRODUCTION_DIR / "flash_flex_plus.ps1"
         if not script.exists():
@@ -426,6 +517,8 @@ def build_flash_command(serial: str, password: str) -> tuple[list[str], Path]:
             "-Password",
             password,
         ]
+        if port:
+            command.extend(["-Port", port])
         return command, PRODUCTION_DIR
     raise RuntimeError(f"Unsupported operating system: {system}")
 
@@ -438,6 +531,44 @@ def find_powershell() -> str:
     raise FileNotFoundError("Neither pwsh nor powershell was found on PATH.")
 
 
+def list_serial_ports() -> list[str]:
+    system = platform.system()
+    ports: list[str] = []
+    try:
+        if system == "Darwin":
+            patterns = (
+                "/dev/cu.usbserial-*",
+                "/dev/cu.SLAB_USB*",
+                "/dev/cu.usbmodem*",
+                "/dev/cu.wchusbserial*",
+            )
+            seen = set()
+            for pat in patterns:
+                for dev in glob.glob(pat):
+                    if dev not in seen:
+                        ports.append(dev)
+                        seen.add(dev)
+        elif system == "Windows":
+            cmd = [
+                find_powershell(),
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID",
+            ]
+            result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line:
+                    ports.append(line)
+        else:
+            # Fallback: check common Linux patterns
+            for dev in glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*"):
+                ports.append(dev)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warning: failed to enumerate serial ports: {exc}")
+    return ports
+
+
 class FlashManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -447,7 +578,7 @@ class FlashManager:
         self._logs: list[str] = []
         self._max_lines = 600
 
-    def start(self, batch: int, year: int, month: int, serial: int) -> tuple[bool, str]:
+    def start(self, batch: int, year: int, month: int, serial: int, port: str | None) -> tuple[bool, str]:
         try:
             unit = PASSWORD_DB.lookup(batch, serial, year, month)
         except ValueError as exc:
@@ -467,7 +598,7 @@ class FlashManager:
                 f"SSID: {unit['ssid']}",
             ]
 
-        thread = threading.Thread(target=self._run_flash, args=(unit,), daemon=True)
+        thread = threading.Thread(target=self._run_flash, args=(unit, port), daemon=True)
         thread.start()
         return True, "Flash started."
 
@@ -478,12 +609,12 @@ class FlashManager:
             if len(self._logs) > self._max_lines:
                 self._logs = self._logs[-self._max_lines :]
 
-    def _run_flash(self, unit: dict[str, object]) -> None:
+    def _run_flash(self, unit: dict[str, object], port: str | None) -> None:
         success = False
         serial_suffix = str(unit["serial"])
         password = str(unit["password"])
         try:
-            command, workdir = build_flash_command(serial_suffix, password)
+            command, workdir = build_flash_command(serial_suffix, password, port)
             command_display = " ".join(shlex.quote(part) for part in command[:-1] + ["******"])
             self._append_log(f"Command: {command_display}")
             process = subprocess.Popen(
@@ -520,6 +651,9 @@ class FlashManager:
                 "status": {"code": self._status_code, "message": self._status_message},
                 "busy": self._busy,
                 "logs": "\n".join(self._logs),
+                "manifest": MANIFEST_INFO,
+                "flow_version": FLOW_VERSION,
+                "flow_revision": FLOW_REVISION,
             }
 
 
@@ -534,6 +668,10 @@ class FlashRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_response(200, payload, "application/json")
         elif self.path.startswith("/lookup"):
             self._handle_lookup()
+        elif self.path.startswith("/ports"):
+            ports = list_serial_ports()
+            payload = json.dumps({"ok": True, "ports": ports}).encode("utf-8")
+            self._send_response(200, payload, "application/json")
         else:
             self.send_error(404, "Not found")
 
@@ -549,6 +687,9 @@ class FlashRequestHandler(http.server.BaseHTTPRequestHandler):
             year = int(data.get("year", [""])[0])
             month = int(data.get("month", [""])[0])
             serial = int(data.get("serial", [""])[0])
+            port = data.get("port", [""])[0].strip()
+            if not port:
+                port = None
         except (TypeError, ValueError):
             self._json_response(
                 {"ok": False, "error": "Batch, year, month, and serial must be integers."},
@@ -556,7 +697,7 @@ class FlashRequestHandler(http.server.BaseHTTPRequestHandler):
             )
             return
 
-        ok, message = self.manager.start(batch, year, month, serial)
+        ok, message = self.manager.start(batch, year, month, serial, port)
         status_code = 200 if ok else 400
         payload = {"ok": ok}
         if not ok:
