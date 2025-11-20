@@ -748,7 +748,7 @@ flash_cmd=(
   "${ESPTOOL}"
   --chip esp32
   --port "${PORT}"
-  --baud "${FLEX_FLASH_BAUD:-921600}"
+  --baud "${FLEX_FLASH_BAUD:-460800}"
   --before default-reset
   --after hard-reset
   write-flash
