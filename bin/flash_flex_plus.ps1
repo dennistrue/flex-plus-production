@@ -168,6 +168,13 @@ if ($SanitizedSerial -ne $Serial) {
     Write-Warning ("Serial sanitized to '{0}' for factory config." -f $SanitizedSerial)
     $Serial = $SanitizedSerial
 }
+if ($Serial.StartsWith("FP")) {
+    $null = $null
+} elseif ($Serial.StartsWith("P")) {
+    $Serial = "FP" + $Serial.Substring(1)
+} else {
+    $Serial = "FP" + $Serial
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ReleaseDir = Join-Path $ScriptDir "release"
@@ -210,7 +217,7 @@ $PythonExe = Resolve-Python
 $FactoryPlainPath = New-TempFilePath "factorycfg_plain_"
 $factoryArgs = @(
     $FactoryTool,
-    "--serial", $SanitizedSerial,
+    "--serial", $Serial,
     "--password", $Password,
     "--output", $FactoryPlainPath
 )
@@ -243,7 +250,7 @@ $espsecureArgs = @(
 
 $UsePreEncrypted = ($FactoryTemplate -like "*.enc.*") -or ($Bootloader -like "*.enc.*")
 $CompressionArg = if ($UsePreEncrypted) { "--no-compress" } else { "--encrypt" }
-$FlashBaud = if ($env:FLEX_FLASH_BAUD) { $env:FLEX_FLASH_BAUD } else { "921600" }
+$FlashBaud = if ($env:FLEX_FLASH_BAUD) { $env:FLEX_FLASH_BAUD } else { "460800" }
 
 $flashArgs = @(
     "--chip", "esp32",
