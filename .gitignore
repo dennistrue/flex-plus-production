@@ -1,4 +1,5 @@
 bin/keys/
 bin/logs/*.csv
+bin/logs/*.log
 
 bin/passwords.csv
