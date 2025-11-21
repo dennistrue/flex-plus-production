@@ -534,6 +534,12 @@ def find_powershell() -> str:
 def list_serial_ports() -> list[str]:
     system = platform.system()
     ports: list[str] = []
+
+    def add_port(port: str) -> None:
+        port = port.strip()
+        if port and port not in ports:
+            ports.append(port)
+
     try:
         if system == "Darwin":
             patterns = (
@@ -542,28 +548,39 @@ def list_serial_ports() -> list[str]:
                 "/dev/cu.usbmodem*",
                 "/dev/cu.wchusbserial*",
             )
-            seen = set()
             for pat in patterns:
                 for dev in glob.glob(pat):
-                    if dev not in seen:
-                        ports.append(dev)
-                        seen.add(dev)
+                    add_port(dev)
         elif system == "Windows":
-            cmd = [
-                find_powershell(),
-                "-NoProfile",
-                "-Command",
-                "Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID",
-            ]
-            result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            for line in result.stdout.splitlines():
-                line = line.strip()
-                if line:
-                    ports.append(line)
+            try:
+                import serial.tools.list_ports  # type: ignore
+            except Exception:
+                try:
+                    result = subprocess.run(
+                        [
+                            "powershell",
+                            "-NoLogo",
+                            "-NoProfile",
+                            "[System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                        check=True,
+                    )
+                except Exception:
+                    add_port("COM3")
+                    add_port("COM4")
+                else:
+                    for line in result.stdout.splitlines():
+                        add_port(line.strip())
+            else:
+                for info in serial.tools.list_ports.comports():  # type: ignore[attr-defined]
+                    add_port(info.device)
         else:
             # Fallback: check common Linux patterns
             for dev in glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*"):
-                ports.append(dev)
+                add_port(dev)
     except Exception as exc:  # noqa: BLE001
         print(f"Warning: failed to enumerate serial ports: {exc}")
     return ports
