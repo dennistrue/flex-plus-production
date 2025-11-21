@@ -20,6 +20,11 @@ from pathlib import Path
 from typing import ClassVar
 
 PRODUCTION_DIR = Path(__file__).resolve().parent
+DOWNLOAD_MODE_IMAGE_CANDIDATES = [
+    PRODUCTION_DIR / "download mode.png",
+    PRODUCTION_DIR.parent / "download mode.png",
+    PRODUCTION_DIR.parent.parent / "download mode.png",
+]
 PASSWORD_DB_PATH = PRODUCTION_DIR / "passwords.csv"
 DEFAULT_PASSWORD = "12345678"
 FLOW_VERSION = "gui-1.0.0"
@@ -136,6 +141,17 @@ INDEX_HTML = """<!DOCTYPE html>
     .message { color: #b91c1c; min-height: 1.2rem; }
     .actions { display: flex; gap: 12px; flex-wrap: wrap; }
     .actions button { flex: none; }
+    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(3px); padding: 12px; z-index: 50; }
+    .modal.open { display: flex; }
+    .modal-card { position: relative; width: min(520px, 100%); background: #fff; color: #0f172a; border-radius: 10px; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+    .modal-card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    .modal-card p { margin: 0 0 12px; color: #334155; }
+    .modal-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+    .modal-actions .spacer { flex: 1; }
+    .modal button.secondary { background-color: #e2e8f0; color: #0f172a; }
+    .modal button.secondary:hover { background-color: #cbd5e1; }
+    .download-image { margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #f8fafc; }
+    .download-image img { width: 100%; height: auto; display: block; border-radius: 6px; }
   </style>
 </head>
 <body>
@@ -207,6 +223,22 @@ INDEX_HTML = """<!DOCTYPE html>
   </div>
   <textarea id="logs" readonly placeholder="Logs will appear here..."></textarea>
 
+  <div class="modal" id="download-modal" aria-hidden="true">
+    <div class="modal-card">
+      <h2>Enter download mode</h2>
+      <p>Before flashing, put the board in download mode. Continue only after the hardware matches the guide.</p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="download-help">What is download mode?</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary" id="download-cancel">Cancel</button>
+        <button type="button" id="download-confirm">Yes, it's in download mode</button>
+      </div>
+      <div class="download-image" id="download-image" hidden>
+        <img src="/download-mode-image" alt="Download mode illustration">
+      </div>
+    </div>
+  </div>
+
   <script>
     const statusBadge = document.getElementById('status');
     const statusTextEl = document.getElementById('status-text');
@@ -226,6 +258,11 @@ INDEX_HTML = """<!DOCTYPE html>
     const nextButton = document.getElementById('next-button');
     const flowVersionEl = document.getElementById('flow-version-text');
     const bundleVersionEl = document.getElementById('bundle-version-text');
+    const downloadModal = document.getElementById('download-modal');
+    const downloadConfirmBtn = document.getElementById('download-confirm');
+    const downloadCancelBtn = document.getElementById('download-cancel');
+    const downloadHelpBtn = document.getElementById('download-help');
+    const downloadImage = document.getElementById('download-image');
     const SERIAL_MIN = 1;
     const SERIAL_MAX = 100;
     const STATUS_CODES = ['ready', 'flashing', 'success', 'failed'];
@@ -250,6 +287,48 @@ INDEX_HTML = """<!DOCTYPE html>
     function markDerivedDirty() {
       derivedReady = false;
       flashButton.disabled = true;
+    }
+
+    function setDownloadModal(open) {
+      if (!downloadModal) return;
+      if (open) {
+        downloadModal.classList.add('open');
+        downloadModal.removeAttribute('aria-hidden');
+        if (downloadImage) {
+          downloadImage.setAttribute('hidden', 'hidden');
+        }
+      } else {
+        downloadModal.classList.remove('open');
+        downloadModal.setAttribute('aria-hidden', 'true');
+      }
+    }
+
+    function promptDownloadMode() {
+      return new Promise((resolve) => {
+        if (!downloadModal || !downloadConfirmBtn || !downloadCancelBtn) {
+          resolve(true);
+          return;
+        }
+        setDownloadModal(true);
+        let settled = false;
+        const finish = (result) => {
+          if (settled) return;
+          settled = true;
+          setDownloadModal(false);
+          downloadConfirmBtn.removeEventListener('click', onConfirm);
+          downloadCancelBtn.removeEventListener('click', onCancel);
+          document.removeEventListener('keydown', onKey);
+          resolve(result);
+        };
+        const onConfirm = () => finish(true);
+        const onCancel = () => finish(false);
+        const onKey = (event) => {
+          if (event.key === 'Escape') finish(false);
+        };
+        downloadConfirmBtn.addEventListener('click', onConfirm);
+        downloadCancelBtn.addEventListener('click', onCancel);
+        document.addEventListener('keydown', onKey);
+      });
     }
 
     function setDefaultYearMonth() {
@@ -362,6 +441,11 @@ INDEX_HTML = """<!DOCTYPE html>
         messageEl.textContent = 'Lookup failed; cannot start flash.';
         return;
       }
+      const confirmed = await promptDownloadMode();
+      if (!confirmed) {
+        messageEl.textContent = 'Flashing cancelled. Put the board in download mode first.';
+        return;
+      }
       messageEl.textContent = '';
       flashButton.disabled = true;
       const params = new URLSearchParams();
@@ -410,6 +494,16 @@ INDEX_HTML = """<!DOCTYPE html>
       } catch (err) {
         console.error('Port refresh failed', err);
       }
+    }
+
+    if (downloadHelpBtn && downloadImage) {
+      downloadHelpBtn.addEventListener('click', () => {
+        if (downloadImage.hasAttribute('hidden')) {
+          downloadImage.removeAttribute('hidden');
+        } else {
+          downloadImage.setAttribute('hidden', 'hidden');
+        }
+      });
     }
 
     form.addEventListener('submit', startFlash);
@@ -689,6 +783,8 @@ class FlashRequestHandler(http.server.BaseHTTPRequestHandler):
             ports = list_serial_ports()
             payload = json.dumps({"ok": True, "ports": ports}).encode("utf-8")
             self._send_response(200, payload, "application/json")
+        elif self.path.startswith("/download-mode-image"):
+            self._handle_download_image()
         else:
             self.send_error(404, "Not found")
 
@@ -734,6 +830,23 @@ class FlashRequestHandler(http.server.BaseHTTPRequestHandler):
             self._json_response({"ok": False, "error": str(exc)}, status=400)
             return
         self._json_response({"ok": True, **unit})
+
+    def _handle_download_image(self) -> None:
+        try:
+            path = next((p for p in DOWNLOAD_MODE_IMAGE_CANDIDATES if p.exists()), None)
+            if path is None:
+                self.send_error(404, "Download mode image not found")
+                return
+            data = path.read_bytes()
+        except Exception as exc:  # noqa: BLE001
+            self.send_error(500, f"Unable to read download mode image: {exc}")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
 
     def _json_response(self, payload: dict[str, object], status: int = 200) -> None:
         body = json.dumps(payload).encode("utf-8")
