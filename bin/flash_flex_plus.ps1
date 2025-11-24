@@ -201,7 +201,7 @@ $Firmware   = Join-Path $ReleaseDir $Artifacts.firmware
 $Spiffs     = Join-Path $ReleaseDir $Artifacts.spiffs
 $FactoryTemplate = Join-Path $ReleaseDir $Artifacts.factory_cfg
 
-[$Bootloader, $BootApp0, $Partitions, $Firmware, $Spiffs, $FactoryTemplate] | ForEach-Object {
+@($Bootloader, $BootApp0, $Partitions, $Firmware, $Spiffs, $FactoryTemplate) | ForEach-Object {
     Require-File $_
 }
 
