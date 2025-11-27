@@ -37,32 +37,25 @@ if errorlevel 1 (
 set "HEAD_BEFORE="
 for /f "usebackq delims=" %%H in (`git -C "%REPO_DIR_GIT%" rev-parse HEAD 2^>nul`) do set "HEAD_BEFORE=%%H"
 
-set "GIT_BRANCH="
-for /f "usebackq delims=" %%B in (`git -C "%REPO_DIR_GIT%" rev-parse --abbrev-ref HEAD 2^>nul`) do set "GIT_BRANCH=%%B"
+call :log "Checking for updates..."
+git -C "%REPO_DIR_GIT%" fetch --tags --quiet >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+    call :log "git fetch failed. Check network/credentials and retry. See log at %LOG_FILE%"
+    exit /b 1
+)
+git -C "%REPO_DIR_GIT%" pull --ff-only >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+    call :log "git pull failed. Resolve Git issues and retry. See log at %LOG_FILE%"
+    exit /b 1
+)
 
-if /i "!GIT_BRANCH!"=="HEAD" (
-    call :log "Repository is in detached HEAD; skipping auto-update."
-) else (
-    call :log "Checking for updates..."
-    git -C "%REPO_DIR_GIT%" fetch --tags --quiet >> "%LOG_FILE%" 2>&1
-    if errorlevel 1 (
-        call :log "git fetch failed. Check network/credentials and retry. See log at %LOG_FILE%"
-        exit /b 1
-    )
-    git -C "%REPO_DIR_GIT%" pull --ff-only >> "%LOG_FILE%" 2>&1
-    if errorlevel 1 (
-        call :log "git pull failed. Resolve Git issues and retry. See log at %LOG_FILE%"
-        exit /b 1
-    )
+set "HEAD_AFTER="
+for /f "usebackq delims=" %%H in (`git -C "%REPO_DIR_GIT%" rev-parse HEAD 2^>nul`) do set "HEAD_AFTER=%%H"
 
-    set "HEAD_AFTER="
-    for /f "usebackq delims=" %%H in (`git -C "%REPO_DIR_GIT%" rev-parse HEAD 2^>nul`) do set "HEAD_AFTER=%%H"
-
-    if not "%HEAD_BEFORE%"=="" if not "%HEAD_AFTER%"=="" if not "%HEAD_AFTER%"=="%HEAD_BEFORE%" (
-        call :log "Repository updated; restarting launcher to pick up changes..."
-        "%~f0" %*
-        exit /b
-    )
+if not "%HEAD_BEFORE%"=="" if not "%HEAD_AFTER%"=="" if not "%HEAD_AFTER%"=="%HEAD_BEFORE%" (
+    call :log "Repository updated; restarting launcher to pick up changes..."
+    "%~f0" %*
+    exit /b
 )
 
 cd /d "%BIN_DIR%"
@@ -121,7 +114,7 @@ if errorlevel 1 (
 
 call :log "Using Python interpreter: %PYTHON_BIN%"
 call :log "Starting GUI in 3 seconds... (Ctrl+C to cancel)"
-ping -n 4 127.0.0.1 >nul
+timeout /t 3 >nul
 
 "%PYTHON_BIN%" "%GUI_SCRIPT%" >> "%LOG_FILE%" 2>&1
 if errorlevel 1 (
