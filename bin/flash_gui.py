@@ -35,7 +35,7 @@ YEAR_MIN = 0
 YEAR_MAX = 99
 MONTH_MIN = 1
 MONTH_MAX = 12
-IDENTIFIER_PREFIX = "FP"
+IDENTIFIER_PREFIX = "FLEXP"
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-9;?]*[ -/]*[@-~]")
 
 
@@ -50,7 +50,7 @@ def validate_month(value: int) -> None:
 
 
 def format_identifier(batch: int, year: int, month: int, serial: int) -> str:
-    return f"{IDENTIFIER_PREFIX}{batch:02d}-{year:02d}{month:02d}{serial:04d}"
+    return f"{IDENTIFIER_PREFIX}{batch:02d}{serial:04d}"
 
 
 class PasswordDatabase:
@@ -156,7 +156,7 @@ INDEX_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <h1>Flex Plus Production Flasher</h1>
-  <p>Provide the batch (two digits), build year/month, and inter-batch serial (001-100). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Each SSID/serial becomes <strong>FP&lt;batch&gt;-&lt;year&gt;&lt;month&gt;&lt;serial&gt;</strong>.</p>
+  <p>Provide the batch (two digits), build year/month, and inter-batch serial (001-100). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Each SSID/serial becomes <strong>FLEXP&lt;batch&gt;&lt;serial&gt;</strong>.</p>
   <form id="flash-form">
     <div class="row">
       <div>
