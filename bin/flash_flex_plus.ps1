@@ -168,12 +168,16 @@ if ($SanitizedSerial -ne $Serial) {
     Write-Warning ("Serial sanitized to '{0}' for factory config." -f $SanitizedSerial)
     $Serial = $SanitizedSerial
 }
-if ($Serial.StartsWith("FP")) {
-    $null = $null
+
+$Prefix = "FLEXP"
+if ($Serial.StartsWith($Prefix)) {
+    $Serial = $Serial
+} elseif ($Serial.StartsWith("FP")) {
+    $Serial = $Prefix + $Serial.Substring(2)
 } elseif ($Serial.StartsWith("P")) {
-    $Serial = "FP" + $Serial.Substring(1)
+    $Serial = $Prefix + $Serial.Substring(1)
 } else {
-    $Serial = "FP" + $Serial
+    $Serial = $Prefix + $Serial
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
