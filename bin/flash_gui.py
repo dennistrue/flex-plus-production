@@ -49,7 +49,11 @@ def validate_month(value: int) -> None:
         raise ValueError(f"Month must be between {MONTH_MIN:02d} and {MONTH_MAX:02d}.")
 
 
-def format_identifier(batch: int, year: int, month: int, serial: int) -> str:
+def format_serial_label(batch: int, year: int, month: int, serial: int) -> str:
+    return f"FP{batch:02d}-{year:02d}{month:02d}{serial:04d}"
+
+
+def format_ssid(batch: int, serial: int) -> str:
     return f"{IDENTIFIER_PREFIX}{batch:02d}{serial:04d}"
 
 
@@ -96,14 +100,15 @@ class PasswordDatabase:
         validate_year(year)
         validate_month(month)
         password = self.entries.get((batch, serial), self.default_password)
-        serial_suffix = format_identifier(batch, year, month, serial)
-        ssid = serial_suffix
+        serial_label = format_serial_label(batch, year, month, serial)
+        ssid = format_ssid(batch, serial)
         return {
             "batch": batch,
             "year": year,
             "month": month,
             "serial_number": serial,
-            "serial": serial_suffix,
+            "serial": serial_label,
+            "serial_label": serial_label,
             "ssid": ssid,
             "password": password,
         }
@@ -156,7 +161,7 @@ INDEX_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <h1>Flex Plus Production Flasher</h1>
-  <p>Provide the batch (two digits), build year/month, and inter-batch serial (001-100). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Each SSID/serial becomes <strong>FLEXP&lt;batch&gt;&lt;serial&gt;</strong>.</p>
+  <p>Provide the batch (two digits), build year/month, and inter-batch serial (001-100). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Serial numbers use <strong>FP&lt;batch&gt;-&lt;year&gt;&lt;month&gt;&lt;serial&gt;</strong>; SSIDs use <strong>FLEXP&lt;batch&gt;&lt;serial&gt;</strong>.</p>
   <form id="flash-form">
     <div class="row">
       <div>
@@ -694,7 +699,8 @@ class FlashManager:
             unit = PASSWORD_DB.lookup(batch, serial, year, month)
         except ValueError as exc:
             return False, str(exc)
-        serial_label = str(unit["serial"])
+        serial_label = str(unit.get("serial") or unit.get("serial_label") or "")
+        flash_serial = str(unit.get("ssid") or serial_label)
         year_value = int(unit["year"])
         month_value = int(unit["month"])
 
@@ -709,7 +715,7 @@ class FlashManager:
                 f"SSID: {unit['ssid']}",
             ]
 
-        thread = threading.Thread(target=self._run_flash, args=(unit, port), daemon=True)
+        thread = threading.Thread(target=self._run_flash, args=(unit, flash_serial, serial_label, port), daemon=True)
         thread.start()
         return True, "Flash started."
 
@@ -720,9 +726,9 @@ class FlashManager:
             if len(self._logs) > self._max_lines:
                 self._logs = self._logs[-self._max_lines :]
 
-    def _run_flash(self, unit: dict[str, object], port: str | None) -> None:
+    def _run_flash(self, unit: dict[str, object], flash_serial: str, serial_label: str, port: str | None) -> None:
         success = False
-        serial_suffix = str(unit["serial"])
+        serial_suffix = flash_serial
         password = str(unit["password"])
         try:
             command, workdir = build_flash_command(serial_suffix, password, port)
@@ -750,10 +756,10 @@ class FlashManager:
                 self._busy = False
                 if success:
                     self._status_code = "success"
-                    self._status_message = f"Successfully flashed {serial_suffix}."
+                    self._status_message = f"Successfully flashed {serial_label or serial_suffix}."
                 else:
                     self._status_code = "failed"
-                    self._status_message = f"Failed flashing {serial_suffix}. Retry."
+                    self._status_message = f"Failed flashing {serial_label or serial_suffix}. Retry."
             self._append_log(final_message)
 
     def state(self) -> dict[str, object]:
