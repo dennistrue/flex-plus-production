@@ -1,8 +1,8 @@
 {
-  "version": "v2.0",
-  "git_commit": "4d69f47",
+  "version": "v2.2",
+  "git_commit": "7655be2",
   "environment": "esp32dev",
-  "built_at": "20251203T110058Z",
+  "built_at": "20251212T203636Z",
   "factory_ssid": "FLEXP0000",
   "ap_password": "12345678",
   "target_ip": "192.168.4.1",
