@@ -4,6 +4,7 @@ This folder mirrors the Main Hub production workflow but is tailored for Flex Pl
 
 - Fixed SoftAP password (`12345678`) unless you override specific units via `bin/passwords.csv`.
 - Factory SSID/serials use the pattern `FP<batch>-<YY><MM><serial>` to keep labeling consistent.
+- Inter-batch serials support `0001` through `9999`.
 - macOS and Windows flashers (`flash_flex_plus.sh` / `flash_flex_plus.ps1`) burn flash encryption keys, write encrypted bundles, and optionally push SSIDs over Wi-Fi.
 - The browser GUI (`flash_gui.py`) launches from the `Run Flex Plus GUI` scripts so operators never touch the CLI.
 

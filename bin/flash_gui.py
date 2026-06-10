@@ -27,10 +27,10 @@ DOWNLOAD_MODE_IMAGE_CANDIDATES = [
 ]
 PASSWORD_DB_PATH = PRODUCTION_DIR / "passwords.csv"
 DEFAULT_PASSWORD = "12345678"
-FLOW_VERSION = "gui-1.0.0"
+FLOW_VERSION = "gui-1.1.0"
 MANIFEST_PATH = PRODUCTION_DIR / "release" / "manifest.json"
 SERIAL_MIN = 1
-SERIAL_MAX = 100
+SERIAL_MAX = 9999
 YEAR_MIN = 0
 YEAR_MAX = 99
 MONTH_MIN = 1
@@ -161,7 +161,7 @@ INDEX_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <h1>Flex Plus Production Flasher</h1>
-  <p>Provide the batch (two digits), build year/month, and inter-batch serial (001-100). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Serial numbers use <strong>FP&lt;batch&gt;-&lt;year&gt;&lt;month&gt;&lt;serial&gt;</strong>; SSIDs use <strong>FLEXP&lt;batch&gt;&lt;serial&gt;</strong>.</p>
+  <p>Provide the batch (two digits), build year/month, and inter-batch serial (0001-9999). Flex Plus uses a static SoftAP password (default <strong>12345678</strong> unless overridden via <code>passwords.csv</code>). Serial numbers use <strong>FP&lt;batch&gt;-&lt;year&gt;&lt;month&gt;&lt;serial&gt;</strong>; SSIDs use <strong>FLEXP&lt;batch&gt;&lt;serial&gt;</strong>.</p>
   <form id="flash-form">
     <div class="row">
       <div>
@@ -179,8 +179,8 @@ INDEX_HTML = """<!DOCTYPE html>
     </div>
     <div class="row">
       <div>
-        <label for="serialNumber">Inter-batch serial (001-100)</label>
-        <input id="serialNumber" name="serialNumber" type="number" min="1" max="100" value="1" required>
+        <label for="serialNumber">Inter-batch serial (0001-9999)</label>
+        <input id="serialNumber" name="serialNumber" type="number" min="1" max="9999" value="1" required>
       </div>
       <div style="flex:0 0 auto;align-self:flex-end;">
         <button type="button" id="next-button">Next</button>
@@ -269,7 +269,7 @@ INDEX_HTML = """<!DOCTYPE html>
     const downloadHelpBtn = document.getElementById('download-help');
     const downloadImage = document.getElementById('download-image');
     const SERIAL_MIN = 1;
-    const SERIAL_MAX = 100;
+    const SERIAL_MAX = 9999;
     const STATUS_CODES = ['ready', 'flashing', 'success', 'failed'];
     let derivedReady = false;
 
